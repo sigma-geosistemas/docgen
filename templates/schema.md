@@ -14,12 +14,12 @@
 ##### Colunas
 
 {% for column in table.columns() %}
-###### {{ column.name }}
+* *{{ column.name }}*
 
-* Descrição: {{ column.description }}
-* Tipo: {{ column.formatted_type() }}
-* Null? {{ column.formatted_is_nullable() }}
-* Padrão: {{ column.formatted_default() }}
+	* Descrição: {{ column.description }}
+	* Tipo: {{ column.formatted_type() }}
+	* Null? {{ column.formatted_is_nullable() }}
+	* Padrão: {{ column.formatted_default() }}
 
 {% endfor %}
 {% endfor %}
