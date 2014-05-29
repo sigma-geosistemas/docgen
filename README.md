@@ -7,7 +7,7 @@ Gerador de documentação para bancos PostgreSQL.
 
 (fora da pasta):
 
-python -m docgen <comando>
+python -m docgen comando
 
 * Ver comandos disponíveis em __main__.py
 
