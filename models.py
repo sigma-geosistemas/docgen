@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from connection import Connection
+from abc import ABCMeta, abstractmethod
 
 class Schema(object):
 
@@ -11,16 +12,16 @@ class Schema(object):
 		self.__tables = None
 		self.__views = None
 
-	@staticmethod
-	def all():
+	@classmethod
+	def all(cls):
 		
 		"""Retorna uma lista com objetos do tipo Schema para todos os Schemas do banco de dados"""
 
 		data = Connection.query("SELECT nspname as name, pg_catalog.obj_description(ns.oid, 'pg_namespace') as description FROM pg_catalog.pg_namespace ns  WHERE nspname != 'information_schema' AND nspname not LIKE 'pg_%' ORDER BY nspname")
 		return [Schema(name=reg[0], description=reg[1]) for reg in data]
 
-	@staticmethod
-	def with_name(name):
+	@classmethod
+	def with_name(cls,name):
 
 		""" Retorna um objeto Schema referente ao schema com nome indicado. None caso não haja nenhum. """
 
@@ -37,7 +38,7 @@ class Schema(object):
 
 		# Executa a query para buscar elas somente uma vez
 		if self.__tables is None:
-			self.__tables = Relation.all(schema=self.name)
+			self.__tables = Table.all(schema=self.name)
 
 		return self.__tables
 
@@ -47,7 +48,7 @@ class Schema(object):
 
 		# Executa a query para buscar elas somente uma vez
 		if self.__views is None:
-			self.__views = Relation.all(schema=self.name, table_type=u"VIEW")
+			self.__views = View.all(schema=self.name)
 
 		return self.__views
 
@@ -71,8 +72,8 @@ class Schema(object):
 			"4. views": views
 		}
 
-	@staticmethod
-	def from_dic(dic):
+	@classmethod
+	def from_dic(cls,dic):
 
 		""" Cria um objeto Schema a partir de um dicionário """
 
@@ -80,13 +81,13 @@ class Schema(object):
 
 		tables = []
 		for t in dic["3. tables"]:
-			tables.append(Relation.from_dic(t,s.name))
+			tables.append(Table.from_dic(t,s.name))
 		s.set_tables(tables)
 
 
 		views = []
 		for v in dic["4. views"]:
-			views.append(Relation.from_dic(v,s.name))
+			views.append(View.from_dic(v,s.name))
 		s.set_views(views)
 
 		return s
@@ -94,6 +95,7 @@ class Schema(object):
 
 	def set_tables(self, tables):
 		self.__tables = tables
+
 
 	def set_views(self, views):
 		self.__views = views
@@ -118,23 +120,18 @@ class Schema(object):
 class Relation(object):
 
 	""" Representa uma tabela ou view no banco de dados """
+
+	__metaclass__ = ABCMeta
 	
-	def __init__(self, schema, name, description, table_type):
+	def __init__(self, schema, name, description):
 		self.schema = schema
 		self.name = name
 		self.description = description
-		self.table_type = table_type
 		self.__columns = None
-
-	def is_table(self):
-		return self.table_type == "BASE TABLE"
-
-	def is_view(self):
-		return self.table_type == "VIEW"
 
 	def columns(self):
 
-		""" Retorna todas colunas que fazem parte da tabela """
+		""" Retorna todas colunas que fazem parte da relação """
 
 		# Executa a query para buscar elas somente uma vez
 		if self.__columns is None:
@@ -142,13 +139,12 @@ class Relation(object):
 
 		return self.__columns
 
-	@staticmethod
-	def all(schema, table_type="BASE TABLE"):
+	@classmethod
+	@abstractmethod
+	def all(cls,schema):
+		""" Retorna uma lista com relações do schema conforme o tipo."""
+		raise NotImplementedError, "Método não implementado na classe base."
 
-		""" Retorna uma lista com objetos do tipo table referente às tabelas do schema conforme o tipo. table_type pode ser BASE TABLE ou VIEW """
-
-		data = Connection.query("SELECT table_name, obj_description((%s || '.' || table_name)::regclass, 'pg_class') as description, table_type FROM information_schema.tables WHERE table_schema = %s AND table_type = %s ORDER BY table_name", (schema,schema,table_type,))
-		return [Relation(schema=schema, name=r[0], description=r[1], table_type=r[2]) for r in data]
 
 	def to_dic(self):
 
@@ -159,57 +155,165 @@ class Relation(object):
 			"2. description": self.description,
 		}
 
-		if self.table_type == "BASE TABLE":
-			columns = []
-			for column in self.columns():
-				columns.append(column.to_dic())
-			dic["3. columns"] = columns
+		
+		columns = []
+		for column in self.columns():
+			columns.append(column.to_dic())
+		dic["3. columns"] = columns
 
 		return dic
 
-
+	@abstractmethod
 	def sync_description(self):
-
 		""" Salva a descrição da relação e de suas colunas (caso seja uma tabela) no banco de dados """
-
-		if self.is_table():
-			if self.description is not None:
-				Connection.execute(u"""COMMENT ON TABLE "{0}"."{1}" IS %s""".format(self.schema,self.name,), (self.description,))
-				for col in self.columns():
-					col.sync_description()
-			else:
-				Connection.execute(u"""COMMENT ON TABLE "{0}"."{1}" IS NULL""".format(self.schema,self.name,))
-
-		elif self.is_view():
-			if self.description is not None:
-				Connection.execute(u"""COMMENT ON VIEW "{0}"."{1}" IS %s""".format(self.schema,self.name,),(self.description,))
-			else:
-				Connection.execute(u"""COMMENT ON VIEW "{0}"."{1}" IS NULL""".format(self.schema,self.name,))
+		raise NotImplementedError, "Método não implementado na classe base."
 
 
-	@staticmethod
-	def from_dic(dic, schema):
-		
+	@classmethod
+	@abstractmethod
+	def from_dic(cls, dic, schema):
 		""" Cria um objeto Relation a partir de um dicionário """
-
-		tt = ("3. columns" in dic) and "BASE TABLE" or "VIEW"
-
-		rel = Relation(name=dic["1. name"], schema=schema, description=dic["2. description"], table_type=tt)
-
-		if rel.is_table():
-			columns = []
-			for c in dic["3. columns"]:
-				column = Column.from_dic(dic=c, schema=schema, table=rel.name)
-				columns.append(column)
-			rel.set_columns(columns)
-
-		return rel
+		raise NotImplementedError, "Método não implementado na classe base."
 
 
 	def set_columns(self,columns):
 		self.__columns = columns
 
 
+class Table(Relation):
+
+	""" Representa uma tabela no banco de dados """
+
+	def __init__(self, schema, name, description):
+		super(Table,self).__init__(schema, name, description)
+		self.__constraints = None
+		self.__indexes = None
+
+	@classmethod
+	def all(cls, schema):
+
+		""" Retorna uma lista com objetos do tipo Table referente às tabelas do schema. """
+
+		data = Connection.query("SELECT table_name, obj_description((%s || '.' || table_name)::regclass, 'pg_class') as description, table_type FROM information_schema.tables WHERE table_schema = %s AND table_type = 'BASE TABLE' ORDER BY table_name", (schema,schema,))
+		return [Table(schema=schema, name=r[0], description=r[1]) for r in data]
+
+
+	def sync_description(self):
+		if self.description is not None:
+			Connection.execute(u"""COMMENT ON TABLE "{0}"."{1}" IS %s""".format(self.schema,self.name,), (self.description,))
+			for col in self.columns():
+				col.sync_description()
+		else:
+			Connection.execute(u"""COMMENT ON TABLE "{0}"."{1}" IS NULL""".format(self.schema,self.name,))
+
+
+	@classmethod
+	def from_dic(cls, dic, schema):
+
+		""" Cria um objeto Table a partir de um dicionário """
+		
+		rel = Table(name=dic["1. name"], schema=schema, description=dic["2. description"])
+
+		columns = []
+		for c in dic["3. columns"]:
+			column = Column.from_dic(dic=c, schema=schema, table=rel.name)
+			columns.append(column)
+		rel.set_columns(columns)
+
+		return rel
+
+
+	def constraints(self):
+		if self.__constraints is None:
+			self.__constraints = Constraint.all(self.schema, self.name)
+
+		return self.__constraints
+
+
+	def indexes(self):
+		if self.__indexes is None:
+			self.__indexes = Index.all(self.schema, self.name)
+
+		return self.__indexes
+
+
+class Index(object):
+	def __init__(self, name, itype, fields):
+		self.name = name
+		self.itype = itype
+		self.fields = fields
+
+	@classmethod
+	def all(cls, schema, table):
+		data = Connection.query("""
+			   SELECT i.relname, am.amname, 
+		       ARRAY(
+			       SELECT pg_get_indexdef(idx.indexrelid, k + 1, true)
+			       FROM generate_subscripts(idx.indkey, 1) as k
+			       ORDER BY k
+		       ) as indkey_names
+
+			   FROM   pg_index as idx
+			   JOIN   pg_class as i ON i.oid = idx.indexrelid
+			   JOIN   pg_am as am ON i.relam = am.oid 
+
+			   WHERE indrelid =  (%s || '.' || %s)::regclass""", (schema,table,))
+
+		return [Index(name=reg[0], itype=reg[1], fields=reg[2]) for reg in data]
+
+
+class Constraint(object):
+	def __init__(self, name, definition):
+		self.name = name
+		self.definition = definition
+
+	@classmethod
+	def all(cls, schema, table):
+		data = Connection.query("""
+				SELECT conname, pg_catalog.pg_get_constraintdef(r.oid, true) as condef
+				FROM pg_catalog.pg_constraint r
+				WHERE conrelid::regclass = (%s || '.' || %s)::regclass
+				""", (schema,table,))
+
+		return [Constraint(name=reg[0], definition=reg[1]) for reg in data]
+
+
+class View(Relation):
+
+	""" Representa uma view no banco de dados """
+
+	@classmethod
+	def all(cls, schema):
+
+		""" Retorna uma lista com objetos do tipo View referente às views do schema. """
+
+		data = Connection.query("SELECT table_name, obj_description((%s || '.' || table_name)::regclass, 'pg_class') as description, table_type FROM information_schema.tables WHERE table_schema = %s AND table_type = 'VIEW' ORDER BY table_name", (schema,schema,))
+		return [View(schema=schema, name=r[0], description=r[1]) for r in data]
+
+
+	def sync_description(self):
+		if self.description is not None:
+			Connection.execute(u"""COMMENT ON VIEW "{0}"."{1}" IS %s""".format(self.schema,self.name,), (self.description,))
+			for col in self.columns():
+				col.sync_description()
+		else:
+			Connection.execute(u"""COMMENT ON VIEW "{0}"."{1}" IS NULL""".format(self.schema,self.name,))
+
+
+	@classmethod
+	def from_dic(cls, dic, schema):
+
+		""" Cria um objeto View a partir de um dicionário """
+		
+		rel = View(name=dic["1. name"], schema=schema, description=dic["2. description"])
+
+		columns = []
+		for c in dic["3. columns"]:
+			column = Column.from_dic(dic=c, schema=schema, table=rel.name)
+			columns.append(column)
+		rel.set_columns(columns)
+
+		return rel
 
 
 class Column(object):
@@ -238,11 +342,13 @@ class Column(object):
 		else:
 			return self.data_type
 
+
 	def formatted_default(self):
 
 		""" Formata o default da coluna, retornando 'Nenhum' caso não haja um default. """
 
 		return self.default or u"Nenhum"
+		
 
 	def formatted_is_nullable(self):
 
@@ -260,12 +366,13 @@ class Column(object):
 			"2. description": self.description
 		}
 
-	@staticmethod
-	def from_dic(dic,schema,table):
+	@classmethod
+	def from_dic(cls,dic,schema,table):
 		return Column(schema=schema, table=table, name=dic["1. name"], description=dic["2. description"])
 
-	@staticmethod
-	def all(schema, table):
+
+	@classmethod
+	def all(cls,schema, table):
 
 		""" Retorna uma lista com objetos do tipo Column referente à todas colunas da tabela 'table' do schema 'schema' """
 

@@ -22,6 +22,40 @@
 	* Padrão: {{ column.formatted_default() }}
 
 {% endfor %}
+
+
+{% if table.indexes() %}
+
+##### Índices
+
+{% for idx in table.indexes() %}
+
+* *{{ idx.name }}*
+
+	* Tipo: {{ idx.itype }}
+	* Campos: {% for field in idx.fields %}{% if loop.index0 != 0 %}, {% endif %}{{ field }}{% endfor %}
+
+{% endfor %}
+
+{% endif %}
+
+
+
+{% if table.constraints() %}
+
+##### Constraints
+
+{% for con in table.constraints() %}
+
+* *{{ con.name }}*
+
+	* Definição: {{ con.definition }}
+
+{% endfor %}
+
+{% endif %}
+
+
 {% endfor %}
 
 {% endif %}
@@ -34,6 +68,16 @@
 ##### {{ view.name }}
 
 * Descrição: {{ view.description }}
+
+##### Colunas
+
+{% for column in view.columns() %}
+* *{{ column.name }}*
+
+	* Descrição: {{ column.description }}
+	* Tipo: {{ column.formatted_type() }}
+
+{% endfor %}
 
 {% endfor %}
 
