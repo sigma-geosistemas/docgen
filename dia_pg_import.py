@@ -200,24 +200,15 @@ class Column(object):
 
 	@property
 	def is_nullable(self):
-		if not isinstance(self.table, Table):
-			return False
-
-		return (self.__is_nullable == "YES")
+		return isinstance(self.table, Table) and self.__is_nullable == "YES"
 
 	@property
 	def is_pk(self):
-		if not isinstance(self.table, Table):
-			return False
-
-		return self.table.has_constraint('PRIMARY KEY ({0})'.format(self.name))
+		return isinstance(self.table, Table) and  self.table.has_constraint('PRIMARY KEY ({0})'.format(self.name))
 
 	@property
 	def is_unique(self):
-		if not isinstance(self.table, Table):
-			return False
-
-		return self.table.has_constraint('UNIQUE ({0})'.format(self.name))
+		return isinstance(self.table, Table) and self.table.has_constraint('UNIQUE ({0})'.format(self.name))
 
 	
 	def __unicode__(self):
