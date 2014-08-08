@@ -11,6 +11,7 @@ psycopg2.extensions.register_type(psycopg2.extensions.UNICODEARRAY)
 class Connection(object):
 
     __connection = psycopg2.connect(PG_PARAMS)
+    __connection.autocommit = True
 
     @staticmethod
     def query(query, qargs=None):

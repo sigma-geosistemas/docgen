@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 from abc import ABCMeta, abstractmethod
+import warnings
+from exceptions import RuntimeWarning
 
 from connection import Connection
 
@@ -117,19 +119,26 @@ class Schema(object):
             no banco de dados
         """
 
-        if self.description is not None:
-            Connection.execute(
-                u"""COMMENT ON SCHEMA {0} IS %s""".format(self.name,),
-                (self.description,))
-        else:
-            Connection.execute(
-                u"""COMMENT ON SCHEMA {0} IS NULL""".format(self.name,))
+        try:
+            if self.description is not None:
+                Connection.execute(
+                    u"""COMMENT ON SCHEMA {0} IS %s""".format(self.name,),
+                    (self.description,))
+            else:
+                Connection.execute(
+                    u"""COMMENT ON SCHEMA {0} IS NULL""".format(self.name,))
 
-        for table in self.tables():
-            table.sync_description()
+            for table in self.tables():
+                table.sync_description()
 
-        for view in self.views():
-            view.sync_description()
+            for view in self.views():
+                view.sync_description()
+
+        except Exception, e:
+            warnings.warn(
+                "Erro ao sincronizar o schema {0}: {1}"
+                .format(self.name, e),
+                RuntimeWarning)
 
 
 class Relation(object):
@@ -222,21 +231,28 @@ class Table(Relation):
                 for r in data]
 
     def sync_description(self):
-        if self.description is not None:
-            Connection.execute(
-                u"""COMMENT ON TABLE "{0}"."{1}" IS %s"""
-                .format(self.schema, self.name,),
+        try:
+            if self.description is not None:
+                Connection.execute(
+                    u"""COMMENT ON TABLE "{0}"."{1}" IS %s"""
+                    .format(self.schema, self.name,),
 
-                (self.description,)
-            )
+                    (self.description,)
+                )
 
-            for col in self.columns():
-                col.sync_description()
-        else:
-            Connection.execute(
-                u"""COMMENT ON TABLE "{0}"."{1}" IS NULL"""
-                .format(self.schema, self.name,)
-            )
+                for col in self.columns():
+                    col.sync_description()
+            else:
+                Connection.execute(
+                    u"""COMMENT ON TABLE "{0}"."{1}" IS NULL"""
+                    .format(self.schema, self.name,)
+                )
+
+        except Exception, e:
+            warnings.warn(
+                "Erro ao sincronizar a tabela {0}.{1}: {2}"
+                .format(self.schema, self.name, e),
+                RuntimeWarning)
 
     @classmethod
     def from_dic(cls, dic, schema):
@@ -341,21 +357,28 @@ class View(Relation):
         return [View(schema=schema, name=r[0], description=r[1]) for r in data]
 
     def sync_description(self):
-        if self.description is not None:
-            Connection.execute(
-                u"""COMMENT ON VIEW "{0}"."{1}" IS %s"""
-                .format(self.schema, self.name,),
+        try:
+            if self.description is not None:
+                Connection.execute(
+                    u"""COMMENT ON VIEW "{0}"."{1}" IS %s"""
+                    .format(self.schema, self.name,),
 
-                (self.description,)
-            )
+                    (self.description,)
+                )
 
-            for col in self.columns():
-                col.sync_description()
-        else:
-            Connection.execute(
-                u"""COMMENT ON VIEW "{0}"."{1}" IS NULL"""
-                .format(self.schema, self.name,)
-            )
+                for col in self.columns():
+                    col.sync_description()
+            else:
+                Connection.execute(
+                    u"""COMMENT ON VIEW "{0}"."{1}" IS NULL"""
+                    .format(self.schema, self.name,)
+                )
+
+        except Exception, e:
+            warnings.warn(
+                "Erro ao sincronizar a view {0}.{1}: {2}"
+                .format(self.schema, self.name, e),
+                RuntimeWarning)
 
     @classmethod
     def from_dic(cls, dic, schema):
@@ -462,16 +485,24 @@ class Column(object):
 
         """ Salva a descrição da coluna no banco de dados """
 
-        if self.description is not None:
-            Connection.execute(
-                u"""COMMENT ON COLUMN "{0}"."{1}"."{2}" IS %s"""
-                .format(self.schema, self.table, self.name,),
+        try:
+            if self.description is not None:
+                Connection.execute(
+                    u"""COMMENT ON COLUMN "{0}"."{1}"."{2}" IS %s"""
+                    .format(self.schema, self.table, self.name,),
 
-                (self.description,)
-            )
+                    (self.description,)
+                )
 
-        else:
-            Connection.execute(
-                u"""COMMENT ON COLUMN "{0}"."{1}"."{2}" IS NULL"""
-                .format(self.schema, self.table, self.name,)
+            else:
+                Connection.execute(
+                    u"""COMMENT ON COLUMN "{0}"."{1}"."{2}" IS NULL"""
+                    .format(self.schema, self.table, self.name,)
+                )
+
+        except Exception, e:
+            warnings.warn(
+                "Erro ao sincronizar a coluna {0}.{1}.{2}: {3}"
+                .format(self.schema, self.table, self.name, e),
+                RuntimeWarning
             )
